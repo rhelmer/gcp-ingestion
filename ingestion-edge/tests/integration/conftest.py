@@ -1,5 +1,5 @@
 from google.cloud.pubsub_v1 import PublisherClient, SubscriberClient
-from pubsub_emulator import PubsubEmulator
+
 from time import sleep
 from typing import Iterator, Optional, Tuple, Union
 
@@ -37,51 +37,27 @@ def pytest_addoption(parser: _pytest.config.argparsing.Parser):
 
 
 @pytest.fixture(scope="session")
-def pubsub(
-    request: _pytest.fixtures.SubRequest,
-) -> Iterator[Union[str, PubsubEmulator]]:
+def pubsub(request: _pytest.fixtures.SubRequest) -> Iterator[str]:
     if "PUBSUB_EMULATOR_HOST" in os.environ:
         yield "remote"
-    elif request.config.getoption("server") is None:
-        emulator = PubsubEmulator(max_workers=1, port=0)
-        emulator.logger.setLevel(logging.DEBUG)
-        try:
-            os.environ["PUBSUB_EMULATOR_HOST"] = "localhost:%d" % emulator.port
-            yield emulator
-        finally:
-            emulator.server.stop(grace=None)
+    # TODO if request.config.getoption("server") is None: use proxy to inject failures
     else:
         yield "google"
 
 
 @pytest.fixture
-def publisher(pubsub: Union[str, PubsubEmulator]) -> PublisherClient:
+def publisher(pubsub: str) -> PublisherClient:
     return PublisherClient()
 
 
 @pytest.fixture
-def subscriber(pubsub: Union[str, PubsubEmulator]) -> SubscriberClient:
-    if "PUBSUB_EMULATOR_HOST" in os.environ:
-        host = os.environ["PUBSUB_EMULATOR_HOST"]
-        try:
-            # PUBSUB_EMULATOR_HOST will override a channel argument
-            # so remove it in order to preserve channel options for
-            # supporting large messages
-            del os.environ["PUBSUB_EMULATOR_HOST"]
-            return SubscriberClient(
-                channel=grpc.insecure_channel(
-                    host, options=[("grpc.max_receive_message_length", -1)]
-                )
-            )
-        finally:
-            os.environ["PUBSUB_EMULATOR_HOST"] = host
-    else:
-        return SubscriberClient()
+def subscriber(pubsub: str) -> SubscriberClient:
+    return SubscriberClient()
 
 
 @pytest.fixture
 def server_and_process(
-    pubsub: Union[str, PubsubEmulator], request: _pytest.fixtures.SubRequest
+    pubsub: str, request: _pytest.fixtures.SubRequest
 ) -> Iterator[Tuple[str, Optional[subprocess.Popen]]]:
     _server = request.config.getoption("server")
     if _server is None:

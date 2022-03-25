@@ -5,14 +5,16 @@ from persistqueue import SQLiteAckQueue
 from pytest_mock import MockFixture
 from sanic import Sanic
 from socket import socket
+from concurrent.futures import Future
 
 
 def test_init_app(
     app: Sanic, client: PublisherClient, mocker: MockFixture, q: SQLiteAckQueue
 ):
     # don't hit actual pubsub
-    publish = mocker.patch.object(client.api, "publish")
-    publish.return_value = PublishResponse(message_ids=["1"])
+    publish = mocker.patch.object(client, "publish")
+    publish.return_value = Future()
+    publish.return_value.set_result("1")
 
     # listener to create test conditions while sanic is running
     @app.listener("after_server_start")
